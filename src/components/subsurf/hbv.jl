@@ -19,6 +19,7 @@ mutable struct Hbv <: AbstractSubsurfLumped
     p_in::Float64
     epot::Float64
     q_out::Float64
+    aevap::Float64
     tstep::Float64
     time::DateTime
     
@@ -39,10 +40,11 @@ function Hbv(tstep::Float64, time::DateTime)
     p_in = 0.0
     epot = 0.0
     q_out = 0.0
+    aevap = 0.0
     
     ord_uh = compute_hbv_ord(maxbas)
     
-    Hbv(sm, suz, slz, st_uh, ord_uh, fc, lp, k0, k1, k2, beta, perc, ulz, maxbas, p_in, epot, q_out, tstep, time)
+    Hbv(sm, suz, slz, st_uh, ord_uh, fc, lp, k0, k1, k2, beta, perc, ulz, maxbas, p_in, epot, q_out, aevap, tstep, time)
     
 end
 
@@ -66,9 +68,9 @@ function init_states!(m::Hbv, init_time::DateTime)
     
     m.time = init_time
     
-    m.sm      = 0.0
-    m.suz     = 0.0
-    m.slz     = 0.0
+    m.sm      = 0.5*m.fc
+    m.suz     = 0.5*m.ulz
+    m.slz     = 0.5*m.ulz
     
     m.ord_uh = compute_hbv_ord(m.maxbas)
     
@@ -76,6 +78,15 @@ function init_states!(m::Hbv, init_time::DateTime)
         m.st_uh[i] = 0.0
     end
     
+end
+
+
+function get_water_stored(m::Hbv)
+
+    water_stored = m.sm + m.suz + m.slz + sum(m.st_uh)
+
+    return water_stored
+
 end
 
 
@@ -106,22 +117,22 @@ function run_timestep(m::Hbv)
         
         # No evapotranspiration
         
-        eact = 0.0
+        aevap = 0.0
         
     else
         
         # Compute actual evapotranspiration
         
-        eact = m.epot * min(m.sm/(m.fc*m.lp), 1.0)
+        aevap = m.epot * min(m.sm/(m.fc*m.lp), 1.0)
         
         # Update soil moisture zone
         
-        m.sm = m.sm - eact
+        m.sm = m.sm - aevap
         
         # Check limits for soil moisture zone
         
         if m.sm < 0.0
-            eact = max(eact + m.sm, 0.0)
+            aevap = max(aevap + m.sm, 0.0)
             m.sm = 0.0
         end
         
@@ -177,7 +188,12 @@ function run_timestep(m::Hbv)
     # Compute total runoff
     
     m.q_out = m.st_uh[1]
-    
+    m.st_uh[1] = 0
+
+    # Add actual evapotranspiration
+
+    m.aevap = aevap
+
     # Update time
     
     m.time  += Dates.Hour(m.tstep)

@@ -19,6 +19,7 @@ mutable struct HbvLightSubsurf <: AbstractSubsurfDist
     p_in::Array{Float64,2}
     epot::Float64
     q_out::Float64
+    aevap::Float64
     frac_lus::Array{Float64,2}
     tstep::Float64
     time::DateTime
@@ -54,12 +55,13 @@ function HbvLightSubsurf(tstep::Float64, time::DateTime, frac_lus::DataFrame)
     p_in = fill(0.0, nlus, nreg)
     epot = 0.0
     q_out = 0.0
+    aevap = 0.0
     
     ord_uh = compute_hbv_ord(maxbas)
     st_uh = zero(ord_uh)
     
     HbvLightSubsurf(sm, suz, slz, st_uh, ord_uh, perc, k0, k1, k2, uzl, fc,
-    lp, beta, maxbas, snow, p_in, epot, q_out, frac_lus, tstep, time)
+    lp, beta, maxbas, snow, p_in, epot, q_out, aevap, frac_lus, tstep, time)
     
 end
 
@@ -93,6 +95,15 @@ function init_states!(m::HbvLightSubsurf, init_time::DateTime)
     
     m.st_uh .= 0.0
     
+end
+
+
+function get_water_stored(m::HbvLightSubsurf)
+
+    water_stored = sum(m.sm .* m.frac_lus) + m.suz + m.slz
+
+    return water_stored    
+
 end
 
 
@@ -201,6 +212,11 @@ function run_timestep(m::HbvLightSubsurf)
     # Output runoff
     
     m.q_out = m.st_uh[1]
+    m.st_uh[1] = 0
+
+    # Output actual evapotranspiration
+
+    m.aevap = avg_aet
 
     # Update time
 
